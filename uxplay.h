@@ -1,0 +1,1 @@
+int init_uxplay (int argc, char *argv[]);

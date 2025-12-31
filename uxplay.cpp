@@ -70,6 +70,7 @@
 #ifdef DBUS
 #include <dbus/dbus.h>
 #endif
+#include "uxplay.h"
 
 
 #define VERSION "1.72"
@@ -194,6 +195,11 @@ static std::string coverart_artist;
 static std::string ble_filename = "";
 static std::string rtp_pipeline = "";
 static GMainLoop *gmainloop = NULL;
+/*let gstreamer manage the window */
+static bool detached = false;
+
+
+extern callbacks_t *uxplay_callbacks = NULL;
 
 //Support for D-Bus-based screensaver inhibition (org.freedesktop.ScreenSaver) 
 static unsigned int scrsv;
@@ -2089,12 +2095,18 @@ extern "C" void conn_init (void *cls) {
     open_connections++;
     LOGD("Open connections: %i", open_connections);
     //video_renderer_update_background(1);
+    if (uxplay_callbacks) {
+        uxplay_callbacks->connection_callback(true);
+    }
 }
 
 extern "C" void conn_destroy (void *cls) {
     //video_renderer_update_background(-1);
     open_connections--;
     LOGD("Open connections: %i", open_connections);
+    if (uxplay_callbacks) {
+        uxplay_callbacks->connection_callback(false);
+    }
     if (open_connections == 0) {
         remote_clock_offset = 0;
         if (use_audio) {
@@ -2695,14 +2707,14 @@ static void read_config_file(const char * filename, const char * uxplay_name) {
 #include <gst/gstmacos.h>
 void real_main (int argc, char *argv[]);
 
-int main (int argc, char *argv[]) {
+extern int init_uxplay (int argc, char *argv[]) {
     LOGI("*=== Using gst_macos_main wrapper for GStreamer >= 1.22 on macOS ===*");
     return  gst_macos_main ((GstMainFunc) real_main, argc, argv , NULL);
 }
 
 void real_main (int argc, char *argv[]) {
 #else
-int main (int argc, char *argv[]) {
+extern int init_uxplay(int argc, char *argv[]) {
 #endif
     std::vector<char> server_hw_addr;
     std::string config_file = "";
@@ -2961,7 +2973,7 @@ int main (int argc, char *argv[]) {
       video_renderer_init(render_logger, server_name.c_str(), videoflip, video_parser.c_str(), rtp_pipeline.c_str(),
                             video_decoder.c_str(), video_converter.c_str(), videosink.c_str(),
                             videosink_options.c_str(), fullscreen, video_sync, h265_support,
-                            render_coverart, playbin_version, NULL);
+                            render_coverart, playbin_version, NULL,detached);
         video_renderer_start();
 #ifdef __OpenBSD__
     } else {
@@ -3059,7 +3071,7 @@ int main (int argc, char *argv[]) {
             video_renderer_init(render_logger, server_name.c_str(), videoflip, video_parser.c_str(),rtp_pipeline.c_str(),
                                 video_decoder.c_str(), video_converter.c_str(), videosink.c_str(),
                                 videosink_options.c_str(), fullscreen, video_sync, h265_support,
-                                render_coverart, playbin_version, uri);
+                                render_coverart, playbin_version, uri,detached);
             video_renderer_start();
         }
         if (reset_httpd) {

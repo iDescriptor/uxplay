@@ -22,6 +22,13 @@
 
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
+#include <gst/app/gstappsink.h>
+#include <gst/video/video.h>
+#include <gst/video/gstvideometa.h>
+#include <gst/video/gstvideopool.h>
+#include <gst/base/base.h>
+
+
 #include "video_renderer.h"
 
 #define SECOND_IN_NSECS 1000000000UL
@@ -58,6 +65,63 @@ static int type_264;
 static int type_265;
 static int type_hls;
 static int type_jpeg;
+
+
+
+static GstFlowReturn on_new_sample_from_sink(GstElement *sink, gpointer user_data) {
+    GstSample *sample;
+    GstBuffer *buffer;
+    GstMapInfo map;
+    GstCaps *caps;
+    GstStructure *structure;
+    GstVideoInfo video_info;
+    int width, height, stride;
+    
+    /* let's threat that as GST_FLOW_OK, but this function should never be called if callbacks are not set */
+    if (!uxplay_callbacks || !uxplay_callbacks->frame_callback) {
+        return GST_FLOW_OK;
+    }
+    
+    // Pull the sample from appsink
+    sample = gst_app_sink_pull_sample(GST_APP_SINK(sink));
+    if (!sample) {
+        return GST_FLOW_ERROR;
+    }
+    
+    // Get caps and extract video info
+    caps = gst_sample_get_caps(sample);
+    if (!caps) {
+        gst_sample_unref(sample);
+        return GST_FLOW_ERROR;
+    }
+    
+    // Parse video info from caps
+    if (!gst_video_info_from_caps(&video_info, caps)) {
+        gst_sample_unref(sample);
+        return GST_FLOW_ERROR;
+    }
+    
+    width = GST_VIDEO_INFO_WIDTH(&video_info);
+    height = GST_VIDEO_INFO_HEIGHT(&video_info);
+    stride = GST_VIDEO_INFO_PLANE_STRIDE(&video_info, 0);
+    
+    // Get the buffer
+    buffer = gst_sample_get_buffer(sample);
+    if (!buffer) {
+        gst_sample_unref(sample);
+        return GST_FLOW_ERROR;
+    }
+    
+    // Map the buffer for reading
+    if (gst_buffer_map(buffer, &map, GST_MAP_READ)) {
+        // frame_callback(map.data, width, height, stride, 0);
+        uxplay_callbacks->frame_callback(map.data, width, height, stride, 0);
+        gst_buffer_unmap(buffer, &map);
+    }
+    
+    gst_sample_unref(sample);
+    return GST_FLOW_OK;
+}
 
 typedef enum {
   //GST_PLAY_FLAG_VIDEO         = (1 << 0),
@@ -221,10 +285,10 @@ GstElement *make_video_sink(const char *videosink, const char *videosink_options
     free(options);
     return video_sink;
 }
-
-void video_renderer_init(logger_t *render_logger, const char *server_name, videoflip_t videoflip[2], const char *parser, const char * rtp_pipeline,
+ 
+void video_renderer_init(logger_t *render_logger, const char *server_name, videoflip_t videoflip[2], const char *parser, const char *rtp_pipeline,
                           const char *decoder, const char *converter, const char *videosink, const char *videosink_options, 
-                          bool initial_fullscreen, bool video_sync, bool h265_support, bool coverart_support, guint playbin_version, const char *uri) {
+                          bool initial_fullscreen, bool video_sync, bool h265_support, bool coverart_support, guint playbin_version, const char *uri, bool detached) {
     GError *error = NULL;
     GstCaps *caps = NULL;
     bool rtp = (bool) strlen(rtp_pipeline);
@@ -344,23 +408,64 @@ void video_renderer_init(logger_t *render_logger, const char *server_name, video
                 g_string_append(launch, " ! ");
                 append_videoflip(launch, &videoflip[0], &videoflip[1]);
                 g_string_append(launch, converter);
-                g_string_append(launch, " ! ");
-                g_string_append(launch, "videoscale ! ");
+                g_string_append(launch, " ! videoscale ! ");
+                
                 if (jpeg_pipeline) {
                     g_string_append(launch, " imagefreeze allow-replace=TRUE ! ");
                 }
-                g_string_append(launch, videosink);
-                g_string_append(launch, " name=");
-                g_string_append(launch, videosink);
-                g_string_append(launch, "_");
-                g_string_append(launch, renderer_type[i]->codec);
-                g_string_append(launch, videosink_options);
-                if (video_sync && !jpeg_pipeline) {
-                    g_string_append(launch, " sync=true");
-                    sync = true;
+                
+                if (uxplay_callbacks && !detached) {
+                    g_string_append(launch, "tee name=t ");
+                    
+                    g_string_append(launch, "t. ! queue ! fakesink ");
+                    if (video_sync && !jpeg_pipeline) {
+                        g_string_append(launch, "sync=true");
+                        sync = true;
+                    } else {
+                        g_string_append(launch, "sync=false");
+                        sync = false;
+                    }
+                    
+                    g_string_append(launch, " t. ! queue max-size-buffers=2 leaky=downstream ! ");
+                    g_string_append(launch, "videoconvert ! video/x-raw,format=RGB ! ");
+                    g_string_append(launch, "appsink name=frame_sink max-buffers=1 drop=true emit-signals=true");
+                    
+                } else if (uxplay_callbacks && detached) {
+                    g_string_append(launch, "tee name=t ");
+                    
+                    g_string_append(launch, "t. ! queue ! ");
+                    g_string_append(launch, videosink);
+                    g_string_append(launch, " name=");
+                    g_string_append(launch, videosink);
+                    g_string_append(launch, "_");
+                    g_string_append(launch, renderer_type[i]->codec);
+                    g_string_append(launch, videosink_options);
+                    if (video_sync && !jpeg_pipeline) {
+                        g_string_append(launch, " sync=true");
+                        sync = true;
+                    } else {
+                        g_string_append(launch, " sync=false");
+                        sync = false;
+                    }
+                    
+                    g_string_append(launch, " t. ! queue max-size-buffers=2 leaky=downstream ! ");
+                    g_string_append(launch, "videoconvert ! video/x-raw,format=RGB ! ");
+                    g_string_append(launch, "appsink name=frame_sink max-buffers=1 drop=true emit-signals=true");
+                    
                 } else {
-                    g_string_append(launch, " sync=false");
-                    sync = false;
+                    g_string_append(launch, videosink);
+                    g_string_append(launch, " name=");
+                    g_string_append(launch, videosink);
+                    g_string_append(launch, "_");
+                    g_string_append(launch, renderer_type[i]->codec);
+                    g_string_append(launch, videosink_options);
+                    if (video_sync && !jpeg_pipeline) {
+                        g_string_append(launch, " sync=true");
+                        sync = true;
+                    } else {
+                        g_string_append(launch, " sync=false");
+                        sync = false;
+                    }
                 }
             }
             if (!strcmp(renderer_type[i]->codec, h264)) {
@@ -445,6 +550,14 @@ void video_renderer_init(logger_t *render_logger, const char *server_name, video
                        "\nthis computer architecture.  (An example: kmssink with fullscreen option -fs"
                        "\nmay work on some systems, but fail on others)");
             exit(1);
+        }
+
+        if (uxplay_callbacks && !detached) {
+            GstElement *frame_sink = gst_bin_get_by_name(GST_BIN(renderer_type[i]->pipeline), "frame_sink");
+            if (frame_sink) {
+                g_signal_connect(frame_sink, "new-sample", G_CALLBACK(on_new_sample_from_sink), NULL);
+                gst_object_unref(frame_sink);
+            }
         }
     }
 }

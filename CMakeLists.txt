@@ -58,7 +58,7 @@ if  ( GST_MACOS )
      message ( STATUS "define GST_MACOS" )
 endif()
 
-add_executable( uxplay uxplay.cpp )
+add_library(uxplay STATIC uxplay.cpp)
 target_link_libraries( uxplay
                    renderers
                    airplay

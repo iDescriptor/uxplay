@@ -35,6 +35,8 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include "../lib/logger.h"
+#include <gst/gst.h>
+#include <gst/app/gstappsrc.h>
 
 typedef enum videoflip_e {
     NONE,
@@ -50,7 +52,7 @@ typedef struct video_renderer_s video_renderer_t;
   void video_renderer_init (logger_t *logger, const char *server_name, videoflip_t videoflip[2], const char *parser, const char *rtp_pipeline,
                           const char *decoder, const char *converter, const char *videosink, const char *videosink_options,
                           bool initial_fullscreen, bool video_sync, bool h265_support, bool coverart_support,
-                          guint playbin_version,  const char *uri);
+                          guint playbin_version,  const char *uri, bool detached);
 void video_renderer_start ();
 void video_renderer_stop ();
 void video_renderer_pause ();
@@ -70,6 +72,17 @@ bool video_get_playback_info(double *duration, double *position, float *rate, bo
 int video_renderer_choose_codec (bool video_is_jpeg, bool video_is_h265);
 unsigned int video_renderer_listen(void *loop, int id);
 unsigned int video_reset_callback(void *loop);
+typedef void (*frame_callback_t)(const unsigned char* data, int width, int height, int stride, int format);
+typedef void (*connection_callback_t)(bool connected);
+
+typedef struct callbacks
+{
+    frame_callback_t frame_callback;
+    connection_callback_t connection_callback;
+} callbacks_t;
+
+extern callbacks_t *uxplay_callbacks;
+
 #ifdef __cplusplus
 }
 #endif
