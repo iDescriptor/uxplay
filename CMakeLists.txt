@@ -31,14 +31,14 @@ if ( ( UNIX AND NOT APPLE ) OR USE_X11 )
   endif()
 endif()
 
-if( UNIX AND NOT APPLE )
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(DBUS dbus-1>=1.4.12)
-  if (DBUS_FOUND )
-      add_definitions(-DDBUS )
-      include_directories(${DBUS_INCLUDE_DIRS})
-  endif()
-endif()
+# if( UNIX AND NOT APPLE )
+#   find_package(PkgConfig REQUIRED)
+#   pkg_check_modules(DBUS dbus-1>=1.4.12)
+#   if (DBUS_FOUND )
+#       add_definitions(-DDBUS )
+#       include_directories(${DBUS_INCLUDE_DIRS})
+#   endif()
+# endif()
 
 if( UNIX AND NOT APPLE )
   add_definitions( -DSUPPRESS_AVAHI_COMPAT_WARNING )
@@ -58,10 +58,13 @@ if  ( GST_MACOS )
      message ( STATUS "define GST_MACOS" )
 endif()
 
+find_package(Qt6 COMPONENTS Core REQUIRED)
+
 add_library(uxplay STATIC uxplay.cpp)
 target_link_libraries( uxplay
                    renderers
                    airplay
+                   Qt6::Core
 		   )
 if (DBUS_FOUND)
 target_link_libraries( uxplay

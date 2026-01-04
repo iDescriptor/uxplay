@@ -428,7 +428,13 @@ void video_renderer_init(logger_t *render_logger, const char *server_name, video
                     
                     g_string_append(launch, " t. ! queue max-size-buffers=2 leaky=downstream ! ");
                     g_string_append(launch, "videoconvert ! video/x-raw,format=RGB ! ");
-                    g_string_append(launch, "appsink name=frame_sink max-buffers=1 drop=true emit-signals=true");
+                    g_string_append(launch, "appsink name=frame_sink ");
+                    g_string_append(launch, "max-buffers=2 ");      
+                    g_string_append(launch, "drop=true ");          
+                    g_string_append(launch, "emit-signals=true ");
+                    g_string_append(launch, "sync=false ");           
+                    g_string_append(launch, "enable-last-sample=false "); 
+                    g_string_append(launch, "qos=true");             
                     
                 } else if (uxplay_callbacks && detached) {
                     g_string_append(launch, "tee name=t ");

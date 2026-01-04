@@ -71,13 +71,14 @@
 #include <dbus/dbus.h>
 #endif
 #include "uxplay.h"
+#include <QDebug>
 
 
 #define VERSION "1.72"
 
 #define SECOND_IN_USECS 1000000
 #define SECOND_IN_NSECS 1000000000UL
-#define DEFAULT_NAME "UxPlay"
+#define DEFAULT_NAME "iDescriptor@UxPlay"
 #define DEFAULT_DEBUG_LOG false
 #define LOWEST_ALLOWED_PORT 1024
 #define HIGHEST_PORT 65535
@@ -141,7 +142,7 @@ static bool fullscreen = false;
 static bool render_coverart = false;
 static std::string coverart_filename = "";
 static std::string metadata_filename = "";
-static bool do_append_hostname = true;
+static bool do_append_hostname = false;
 static bool use_random_hw_addr = false;
 static unsigned short display[5] = {0}, tcp[3] = {0}, udp[3] = {0};
 static bool debug_log = DEFAULT_DEBUG_LOG;
@@ -195,7 +196,10 @@ static std::string coverart_artist;
 static std::string ble_filename = "";
 static std::string rtp_pipeline = "";
 static GMainLoop *gmainloop = NULL;
-/*let gstreamer manage the window */
+/*
+    let gstreamer manage the window, it's set to false because cleanup is not yet implemented
+    when gstreamer manages the window 
+*/
 static bool detached = false;
 
 
@@ -516,98 +520,104 @@ static void dump_video_to_file(unsigned char *data, int datalen) {
     }
 }
 
-static gboolean feedback_callback(gpointer loop) {
-    if (open_connections) {
-        if (missed_feedback_limit && missed_feedback > missed_feedback_limit) {
-            LOGI("***ERROR lost connection with client (network problem?)");
-            LOGI("%u missed client feedback signals exceeds limit of %u", missed_feedback, missed_feedback_limit);
-            LOGI("   Sometimes the network connection may recover after a longer delay:\n"
-                 "   the default limit n = %d seconds, can be changed with the \"-reset n\" option", MISSED_FEEDBACK_LIMIT);
-            if (!nofreeze) {
-                close_window = false; /* leave "frozen" window open if reset_video is false */
-            }
-	    reset_httpd = true;
-	    relaunch_video = true;
-            g_main_loop_quit((GMainLoop *) loop);
-            return TRUE;
-        } else if (missed_feedback > 2) {
-            LOGE("%u missed client feedback signals (expected every two seconds); client may be offline", missed_feedback);
-        }
-        missed_feedback++;
-    } else {
-        missed_feedback = 0;
-    }
-    return TRUE;
-}
+// TODO
+// static gboolean feedback_callback(gpointer loop) {
+//     if (open_connections) {
+//         if (missed_feedback_limit && missed_feedback > missed_feedback_limit) {
+//             LOGI("***ERROR lost connection with client (network problem?)");
+//             LOGI("%u missed client feedback signals exceeds limit of %u", missed_feedback, missed_feedback_limit);
+//             LOGI("   Sometimes the network connection may recover after a longer delay:\n"
+//                  "   the default limit n = %d seconds, can be changed with the \"-reset n\" option", MISSED_FEEDBACK_LIMIT);
+//             if (!nofreeze) {
+//                 close_window = false; /* leave "frozen" window open if reset_video is false */
+//             }
+// 	    reset_httpd = true;
+// 	    relaunch_video = true;
+//             g_main_loop_quit((GMainLoop *) loop);
+//             return TRUE;
+//         } else if (missed_feedback > 2) {
+//             LOGE("%u missed client feedback signals (expected every two seconds); client may be offline", missed_feedback);
+//         }
+//         missed_feedback++;
+//     } else {
+//         missed_feedback = 0;
+//     }
+//     return TRUE;
+// }
 
-static gboolean reset_callback(gpointer loop) {
-    if (reset_loop) {
-        g_main_loop_quit((GMainLoop *) loop);
-    }
-    return TRUE;
-}
+// static gboolean reset_callback(gpointer loop) {
+//     if (reset_loop) {
+//         g_main_loop_quit((GMainLoop *) loop);
+//     }
+//     return TRUE;
+// }
 
-static gboolean x11_window_callback(gpointer loop) {
-    /* called while trying to find an x11 window used by playbin (HLS mode) */
-    if (waiting_for_x11_window()) {
-        return TRUE;
-    }
-    g_source_remove(gst_x11_window_id);
-    gst_x11_window_id = 0;
-    return FALSE;
-}
+// static gboolean x11_window_callback(gpointer loop) {
+//     /* called while trying to find an x11 window used by playbin (HLS mode) */
+//     if (waiting_for_x11_window()) {
+//         return TRUE;
+//     }
+//     g_source_remove(gst_x11_window_id);
+//     gst_x11_window_id = 0;
+//     return FALSE;
+// }
 
 /* signals handlers (ctrl-c, etc )*/
 
 static void cleanup();
 
-#ifdef _WIN32
-static gboolean handle_signal(gpointer data) {
-    relaunch_video = false;
-    g_main_loop_quit(gmainloop);
-    return G_SOURCE_REMOVE;
-}
+// #ifdef _WIN32
+// static gboolean handle_signal(gpointer data) {
+//     relaunch_video = false;
+//     g_main_loop_quit(gmainloop);
+//     return G_SOURCE_REMOVE;
+// }
 
-static BOOL WINAPI CtrlHandler(DWORD signal) {
-    switch (signal) {
-    case CTRL_C_EVENT:
-    case CTRL_CLOSE_EVENT:
-    case CTRL_SHUTDOWN_EVENT:
-        if (gmainloop) {
-            g_idle_add(handle_signal, NULL);
-            return TRUE;
-        } else {  
-            cleanup();
-            exit(0);
-	}
-    default:
-        return FALSE;
-    }
-}
-#else
-static void CtrlHandler(int signum) {
-    cleanup();
-    exit(0);
-}
+// static BOOL WINAPI CtrlHandler(DWORD signal) {
+//     switch (signal) {
+//     case CTRL_C_EVENT:
+//     case CTRL_CLOSE_EVENT:
+//     case CTRL_SHUTDOWN_EVENT:
+//         if (gmainloop) {
+//             g_idle_add(handle_signal, NULL);
+//             return TRUE;
+//         } else {  
+//             cleanup();
+//             exit(0);
+// 	}
+//     default:
+//         return FALSE;
+//     }
+// }
+// #else
+// static void CtrlHandler(int signum) {
+//     cleanup();
+//     exit(0);
+// }
 
-static gboolean sigint_callback(gpointer loop) {
-    relaunch_video = false;
-    g_main_loop_quit((GMainLoop *) loop);
-    return TRUE;
-}
+// extern void uxplay_cleanup() {
+//     cleanup();
+//     // exit(0);
+// }
 
-static gboolean sigterm_callback(gpointer loop) {
-    relaunch_video = false;
-    g_main_loop_quit((GMainLoop *) loop);
-    return TRUE;
-}
+// static gboolean sigint_callback(gpointer loop) {
+//     relaunch_video = false;
+//     g_main_loop_quit((GMainLoop *) loop);
+//     return TRUE;
+// }
 
-static gboolean sighup_callback(gpointer loop) {
-    relaunch_video = false;
-    g_main_loop_quit((GMainLoop *) loop);
-    return TRUE;
-}
-#endif
+// static gboolean sigterm_callback(gpointer loop) {
+//     relaunch_video = false;
+//     g_main_loop_quit((GMainLoop *) loop);
+//     return TRUE;
+// }
+
+// static gboolean sighup_callback(gpointer loop) {
+//     relaunch_video = false;
+//     g_main_loop_quit((GMainLoop *) loop);
+//     return TRUE;
+// }
+// #endif
 
 static void display_progress(uint32_t start, uint32_t curr, uint32_t end) {
     if (curr < start || curr > end) {
@@ -640,94 +650,104 @@ static gboolean progress_callback (gpointer loop) {
 
 #define MAX_VIDEO_RENDERERS 3
 #define MAX_AUDIO_RENDERERS 2
-static void main_loop()  {
-    guint gst_video_bus_watch_id[MAX_VIDEO_RENDERERS] = { 0 };
-    guint gst_audio_bus_watch_id[MAX_AUDIO_RENDERERS] = { 0 };
-    GMainLoop *loop = g_main_loop_new(NULL,FALSE);
-    relaunch_video = false;
-    monitor_progress = false;
-    reset_loop = false;
-    reset_httpd = false;
-    preserve_connections = false;
-    n_video_renderers = 0;
-    n_audio_renderers = 0;
-    if (use_video) {
-        n_video_renderers = 1;
-        relaunch_video = true;
-        if (url.empty()) {
-            if (h265_support) {
-                n_video_renderers++;
-            }
-            if (render_coverart) {
-                n_video_renderers++;
-            }
-            /* renderer[0] : h264 video; followed by  h265 video (optional) and jpeg (optional)  */
-            gst_x11_window_id = 0;           
-        } else {
-            /* hls video will be rendered: renderer[0] : hls  */
-            url.erase();
-            gst_x11_window_id = g_timeout_add(100, (GSourceFunc) x11_window_callback, (gpointer) loop);
-        }
-        g_assert(n_video_renderers <= MAX_VIDEO_RENDERERS);
-        for (int i = 0; i < n_video_renderers; i++) {
-            gst_video_bus_watch_id[i] = (guint) video_renderer_listen((void *)loop, i);
-        }
-    }
-    if (use_audio) {
-        rtptime_start = 0;
-        rtptime_end = 0;
-        monitor_progress = true;
-        artist.erase();
-        coverart_artist.erase();
-        progress_id  = g_timeout_add_seconds(1,(GSourceFunc) progress_callback, (gpointer) loop);
-        n_audio_renderers = 2;
-        g_assert(n_audio_renderers <= MAX_AUDIO_RENDERERS);
-        for (int i = 0; i < n_audio_renderers; i++) {
-            gst_audio_bus_watch_id[i] = (guint) audio_renderer_listen((void *)loop, i);      
-        }
-    }
+// static void main_loop()  {
+//     guint gst_video_bus_watch_id[MAX_VIDEO_RENDERERS] = { 0 };
+//     guint gst_audio_bus_watch_id[MAX_AUDIO_RENDERERS] = { 0 };
+//     // GMainLoop *loop = g_main_loop_new(NULL,FALSE);
+//     // gmainloop = loop;
+//     relaunch_video = false;
+//     monitor_progress = false;
+//     reset_loop = false;
+//     reset_httpd = false;
+//     preserve_connections = false;
+//     n_video_renderers = 0;
+//     n_audio_renderers = 0;
+//     if (use_video) {
+//         n_video_renderers = 1;
+//         relaunch_video = true;
+//         if (url.empty()) {
+//             if (h265_support) {
+//                 n_video_renderers++;
+//             }
+//             if (render_coverart) {
+//                 n_video_renderers++;
+//             }
+//             /* renderer[0] : h264 video; followed by  h265 video (optional) and jpeg (optional)  */
+//             // gst_x11_window_id = 0;           
+//         } else {
+//             /* hls video will be rendered: renderer[0] : hls  */
+//             url.erase();
+//             // gst_x11_window_id = g_timeout_add(100, (GSourceFunc) x11_window_callback, (gpointer) loop);
+//         }
+//         g_assert(n_video_renderers <= MAX_VIDEO_RENDERERS);
+//         for (int i = 0; i < n_video_renderers; i++) {
+//             // gst_video_bus_watch_id[i] = (guint) video_renderer_listen((void *)loop, i);
+//         }
+//     }
+//     if (use_audio) {
+//         rtptime_start = 0;
+//         rtptime_end = 0;
+//         monitor_progress = true;
+//         artist.erase();
+//         coverart_artist.erase();
+//         // progress_id  = g_timeout_add_seconds(1,(GSourceFunc) progress_callback, (gpointer) loop);
+//         n_audio_renderers = 2;
+//         g_assert(n_audio_renderers <= MAX_AUDIO_RENDERERS);
+//         for (int i = 0; i < n_audio_renderers; i++) {
+//             // gst_audio_bus_watch_id[i] = (guint) audio_renderer_listen((void *)loop, i);      
+//         }
+//     }
 
-    missed_feedback = 0;
-    guint feedback_watch_id = g_timeout_add_seconds(1, (GSourceFunc) feedback_callback, (gpointer) loop);
-    guint reset_watch_id = g_timeout_add(100, (GSourceFunc) reset_callback, (gpointer) loop);
-    guint video_reset_watch_id = g_timeout_add(100, (GSourceFunc) video_reset_callback, (gpointer) loop);
+// //     missed_feedback = 0;
+// //     guint feedback_watch_id = g_timeout_add_seconds(1, (GSourceFunc) feedback_callback, (gpointer) loop);
+// //     guint reset_watch_id = g_timeout_add(100, (GSourceFunc) reset_callback, (gpointer) loop);
+// //     guint video_reset_watch_id = g_timeout_add(100, (GSourceFunc) video_reset_callback, (gpointer) loop);
 
-#ifdef _WIN32
-    gmainloop = loop;
-#else 
-    signal(SIGINT, SIG_DFL);
-    signal(SIGTERM, SIG_DFL);
-    signal(SIGHUP, SIG_DFL);
-    guint sigterm_watch_id = g_unix_signal_add(SIGTERM, (GSourceFunc) sigterm_callback, (gpointer) loop);
-    guint sigint_watch_id = g_unix_signal_add(SIGINT, (GSourceFunc) sigint_callback, (gpointer) loop);
-    guint sighup_watch_id = g_unix_signal_add(SIGHUP, (GSourceFunc) sigint_callback, (gpointer) loop);
-#endif
-    g_main_loop_run(loop);
+// // #ifdef _WIN32
+// //     gmainloop = loop;
+// // #else 
+// //     signal(SIGINT, SIG_DFL);
+// //     signal(SIGTERM, SIG_DFL);
+// //     signal(SIGHUP, SIG_DFL);
+// //     guint sigterm_watch_id = g_unix_signal_add(SIGTERM, (GSourceFunc) sigterm_callback, (gpointer) loop);
+// //     guint sigint_watch_id = g_unix_signal_add(SIGINT, (GSourceFunc) sigint_callback, (gpointer) loop);
+// //     guint sighup_watch_id = g_unix_signal_add(SIGHUP, (GSourceFunc) sigint_callback, (gpointer) loop);
+// // #endif
+// //     g_main_loop_run(loop);
 
-#ifdef _WIN32
-    gmainloop = NULL;
-#else
-    signal(SIGINT, CtrlHandler);  //switch back to non-mainloop CtrlHandler
-    signal(SIGTERM, CtrlHandler);
-    signal(SIGHUP, CtrlHandler);
-    if (sigint_watch_id > 0) g_source_remove(sigint_watch_id);
-    if (sigterm_watch_id > 0) g_source_remove(sigterm_watch_id);
-    if (sighup_watch_id > 0) g_source_remove(sighup_watch_id);
-#endif
+// // #ifdef _WIN32
+// //     gmainloop = NULL;
+// // #else
+// //     signal(SIGINT, CtrlHandler);  //switch back to non-mainloop CtrlHandler
+// //     signal(SIGTERM, CtrlHandler);
+// //     signal(SIGHUP, CtrlHandler);
+// //     if (sigint_watch_id > 0) g_source_remove(sigint_watch_id);
+// //     if (sigterm_watch_id > 0) g_source_remove(sigterm_watch_id);
+// //     if (sighup_watch_id > 0) g_source_remove(sighup_watch_id);
+// // #endif
+// //     //log watch ids for debugging
+// //     qDebug() << "main_loop: video bus watch ids:" << gst_video_bus_watch_id[0] << "," << gst_video_bus_watch_id[1] << "," << gst_video_bus_watch_id[2];
+// //     qDebug() << "main_loop: audio bus watch ids:" << gst_audio_bus_watch_id[0] << "," << gst_audio_bus_watch_id[1];
+// //     qDebug() << "main_loop: x11 window id:" << gst_x11_window_id;
+// //     qDebug() << "main_loop: reset watch id:" << reset_watch_id;
+// //     qDebug() << "main_loop: progress id:" << progress_id;
+// //     qDebug() << "main_loop: video reset watch id:" << video_reset_watch_id;
+// //     qDebug() << "main_loop: feedback watch id:" << feedback_watch_id;
 
-    for (int i = 0; i < n_video_renderers; i++) {
-        if (gst_video_bus_watch_id[i] > 0) g_source_remove(gst_video_bus_watch_id[i]);
-    }
-    for (int i = 0; i < n_audio_renderers; i++) {
-        if (gst_audio_bus_watch_id[i] > 0) g_source_remove(gst_audio_bus_watch_id[i]);
-    }
-    if (gst_x11_window_id > 0) g_source_remove(gst_x11_window_id);
-    if (reset_watch_id > 0) g_source_remove(reset_watch_id);
-    if (progress_id > 0) g_source_remove(progress_id);
-    if (video_reset_watch_id > 0) g_source_remove(video_reset_watch_id);
-    if (feedback_watch_id > 0) g_source_remove(feedback_watch_id);
-    g_main_loop_unref(loop);
-}    
+// //     for (int i = 0; i < n_video_renderers; i++) {
+// //         if (gst_video_bus_watch_id[i] > 0) g_source_remove(gst_video_bus_watch_id[i]);
+// //     }
+// //     // for (int i = 0; i < n_audio_renderers; i++) {
+// //     //     if (gst_audio_bus_watch_id[i] > 0) g_source_remove(gst_audio_bus_watch_id[i]);
+// //     // }
+// //     // if (gst_x11_window_id > 0) g_source_remove(gst_x11_window_id);
+// //     if (reset_watch_id > 0) g_source_remove(reset_watch_id);
+// //     if (progress_id > 0) g_source_remove(progress_id);
+// //     if (video_reset_watch_id > 0) g_source_remove(video_reset_watch_id);
+// //     if (feedback_watch_id > 0) g_source_remove(feedback_watch_id);
+// //     g_main_loop_unref(loop);
+//     //   gmainloop = NULL; 
+// }    
 
 static int parse_hw_addr (std::string str, std::vector<char> &hw_addr) {
     for (int i = 0; i < (int) str.length(); i += 3) {
@@ -2701,40 +2721,27 @@ static void read_config_file(const char * filename, const char * uxplay_name) {
     }
 }
 
-#ifdef GST_MACOS
-/* workaround for GStreamer >= 1.22 "Official Builds" on macOS */
-#include <TargetConditionals.h>
-#include <gst/gstmacos.h>
-void real_main (int argc, char *argv[]);
 
-extern int init_uxplay (int argc, char *argv[]) {
-    LOGI("*=== Using gst_macos_main wrapper for GStreamer >= 1.22 on macOS ===*");
-    return  gst_macos_main ((GstMainFunc) real_main, argc, argv , NULL);
-}
-
-void real_main (int argc, char *argv[]) {
-#else
 extern int init_uxplay(int argc, char *argv[]) {
-#endif
     std::vector<char> server_hw_addr;
     std::string config_file = "";
 
-#ifdef _WIN32
-    if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
-        LOGE("Could not set control handler");
-        exit(1);
-    }
-#else
-    signal(SIGINT, CtrlHandler);
-    signal(SIGTERM, CtrlHandler);
-    signal(SIGHUP, CtrlHandler);
-#endif
+// #ifdef _WIN32
+//     if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
+//         LOGE("Could not set control handler");
+//         exit(1);
+//     }
+// #else
+//     signal(SIGINT, CtrlHandler);
+//     signal(SIGTERM, CtrlHandler);
+//     signal(SIGHUP, CtrlHandler);
+// #endif
 
-#ifdef __OpenBSD__
-    if (unveil("/", "rwc") == -1 || unveil(NULL, NULL) == -1) {
-        err(1, "unveil");
-    }
-#endif
+// #ifdef __OpenBSD__
+//     if (unveil("/", "rwc") == -1 || unveil(NULL, NULL) == -1) {
+//         err(1, "unveil");
+//     }
+// #endif
 
 #ifdef SUPPRESS_AVAHI_COMPAT_WARNING
     // suppress avahi_compat nag message.  avahi emits a "nag" warning (once)
@@ -2777,15 +2784,15 @@ extern int init_uxplay(int argc, char *argv[]) {
     }
 
     
-#ifdef _WIN32    /*  use utf-8 terminal output; don't buffer stdout in WIN32 when debug_log = false */
-    SetConsoleOutputCP(CP_UTF8);
-    if (!debug_log) {
-        setbuf(stdout, NULL);
-    }
-#endif
+// #ifdef _WIN32    /*  use utf-8 terminal output; don't buffer stdout in WIN32 when debug_log = false */
+//     SetConsoleOutputCP(CP_UTF8);
+//     if (!debug_log) {
+//         setbuf(stdout, NULL);
+//     }
+// #endif
 
     LOGI("UxPlay %s: An Open-Source AirPlay mirroring and audio-streaming server.", VERSION);
-
+// TODO : do we need DBUS ?
 #ifdef DBUS
     if (scrsv) {
         DBusError dbus_error;
@@ -2851,12 +2858,12 @@ extern int init_uxplay(int argc, char *argv[]) {
         }
     }
 
-#if __APPLE__
-    /* warn about default  use of -nc option on macOS */
-    if (!new_window_closing_behavior) {
-        LOGI("UxPlay on macOS is using -nc option as workaround for GStreamer problem: use \"-nc no\" to omit workaround");
-    }
-#endif
+// #if __APPLE__
+//     /* warn about default  use of -nc option on macOS */
+//     if (!new_window_closing_behavior) {
+//         LOGI("UxPlay on macOS is using -nc option as workaround for GStreamer problem: use \"-nc no\" to omit workaround");
+//     }
+// #endif
 
     if (videosink == "0") {
         use_video = false;
@@ -3023,72 +3030,116 @@ extern int init_uxplay(int argc, char *argv[]) {
     }
 
     if (start_dnssd(server_hw_addr, server_name)) {
+        qDebug() << "Failed to start DNS-SD exiting...";
         cleanup();
+        return -1;
     }
     if (start_raop_server(display, tcp, udp, debug_log)) {
+        qDebug() << "Failed to start RAOP Server exiting...";
         stop_dnssd();
         cleanup();
+        return -1;
     }
 
-#define PID_MAX 4194304 // 2^22
-    if (ble_filename.length()) {
-#ifdef _WIN32
-        DWORD winpid = GetCurrentProcessId();
-	uint32_t pid = (uint32_t) winpid;
-        g_assert(pid <= PID_MAX);
-#else
-        pid_t pid = getpid();
-        g_assert (pid <= PID_MAX && pid >= 0);
-#endif
-        write_bledata((uint32_t *) &pid, argv[0], ble_filename.c_str());
-        LOGI("Bluetooth LE beacon-based service discovery is possible: PID data written to %s", ble_filename.c_str());
-    }
+// #define PID_MAX 4194304 // 2^22
+//     if (ble_filename.length()) {
+// #ifdef _WIN32
+//         DWORD winpid = GetCurrentProcessId();
+// 	uint32_t pid = (uint32_t) winpid;
+//         g_assert(pid <= PID_MAX);
+// #else
+//         pid_t pid = getpid();
+//         g_assert (pid <= PID_MAX && pid >= 0);
+// #endif
+//         write_bledata((uint32_t *) &pid, argv[0], ble_filename.c_str());
+//         LOGI("Bluetooth LE beacon-based service discovery is possible: PID data written to %s", ble_filename.c_str());
+//     }
     
     if (register_dnssd()) {
+        qDebug() << "Failed to register DNS-SD exiting...";
         stop_raop_server();
         stop_dnssd();
         cleanup();
+        return -1;
     }
     reconnect:
     compression_type = 0;
     close_window = new_window_closing_behavior;
-    main_loop();
-    if (relaunch_video) {
-        if (reset_httpd) {
-            raop_stop_httpd(raop);
-        }
-        if (use_audio) {
-            audio_renderer_stop();
-        }
-        if (use_video && (close_window || preserve_connections)) {
-            video_renderer_destroy();
-            if (!preserve_connections) {
-                raop_destroy_airplay_video(raop);
-                url.erase();
-                raop_remove_known_connections(raop);
-            }
-            const char *uri = (url.empty() ? NULL : url.c_str());
-            video_renderer_init(render_logger, server_name.c_str(), videoflip, video_parser.c_str(),rtp_pipeline.c_str(),
-                                video_decoder.c_str(), video_converter.c_str(), videosink.c_str(),
-                                videosink_options.c_str(), fullscreen, video_sync, h265_support,
-                                render_coverart, playbin_version, uri,detached);
-            video_renderer_start();
-        }
-        if (reset_httpd) {
-            unsigned short port = raop_get_port(raop);
-            raop_start_httpd(raop, &port);
-            raop_set_port(raop, port);
-        }
-        goto reconnect;
-    } else {
-        LOGI("Stopping RAOP Server...");
-        stop_raop_server();
-        stop_dnssd();
+    gmainloop = g_main_loop_new(NULL, FALSE);
+    g_main_loop_run(gmainloop);
+
+    // Clean up the main loop reference
+    GMainLoop *loop = gmainloop;
+    gmainloop = NULL;
+    if (loop) {
+        g_main_loop_unref(loop);
     }
+
+    // Stop servers before cleanup
+    qDebug() << "Stopping RAOP Server...";
+    stop_raop_server();
+    stop_dnssd();
+    
     cleanup();
+    
+    return 0;
+    // main_loop();
+    // if (relaunch_video) {
+    //     if (reset_httpd) {
+    //         raop_stop_httpd(raop);
+    //     }
+    //     if (use_audio) {
+    //         audio_renderer_stop();
+    //     }
+    //     if (use_video && (close_window || preserve_connections)) {
+    //         video_renderer_destroy();
+    //         if (!preserve_connections) {
+    //             raop_destroy_airplay_video(raop);
+    //             url.erase();
+    //             raop_remove_known_connections(raop);
+    //         }
+    //         const char *uri = (url.empty() ? NULL : url.c_str());
+            // video_renderer_init(render_logger, server_name.c_str(), videoflip, video_parser.c_str(),rtp_pipeline.c_str(),
+            //                     video_decoder.c_str(), video_converter.c_str(), videosink.c_str(),
+            //                     videosink_options.c_str(), fullscreen, video_sync, h265_support,
+            //                     render_coverart, playbin_version, uri,detached);
+    //         video_renderer_start();
+    //     }
+    //     if (reset_httpd) {
+    //         unsigned short port = raop_get_port(raop);
+    //         raop_start_httpd(raop, &port);
+    //         raop_set_port(raop, port);
+    //     }
+    //     goto reconnect;
+    // } else {
+    //     LOGI("Stopping RAOP Server...");
+    //     stop_raop_server();
+    //     stop_dnssd();
+    // }
+    // cleanup();
 }
- 
+
+
+extern void uxplay_cleanup() {
+    relaunch_video = false;
+    // cleanup();
+    if (!gmainloop) {
+        qDebug() << "gmainloop is NULL in uxplay_cleanup"; 
+        return;
+    }
+    
+    // Make sure we're not already quitting
+    bool running = g_main_loop_is_running(gmainloop);
+
+    qDebug() << "uxplay_cleanup called, main loop running: " << (running ? "true" : "false");
+    if (running) {
+        g_main_loop_quit((GMainLoop *) gmainloop);
+    }
+}
+
+
 static void cleanup() {
+    qDebug() << "Cleaning up...";
     if (use_audio) {
         audio_renderer_destroy();
     }
