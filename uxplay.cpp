@@ -520,37 +520,36 @@ static void dump_video_to_file(unsigned char *data, int datalen) {
     }
 }
 
-// TODO
-// static gboolean feedback_callback(gpointer loop) {
-//     if (open_connections) {
-//         if (missed_feedback_limit && missed_feedback > missed_feedback_limit) {
-//             LOGI("***ERROR lost connection with client (network problem?)");
-//             LOGI("%u missed client feedback signals exceeds limit of %u", missed_feedback, missed_feedback_limit);
-//             LOGI("   Sometimes the network connection may recover after a longer delay:\n"
-//                  "   the default limit n = %d seconds, can be changed with the \"-reset n\" option", MISSED_FEEDBACK_LIMIT);
-//             if (!nofreeze) {
-//                 close_window = false; /* leave "frozen" window open if reset_video is false */
-//             }
-// 	    reset_httpd = true;
-// 	    relaunch_video = true;
-//             g_main_loop_quit((GMainLoop *) loop);
-//             return TRUE;
-//         } else if (missed_feedback > 2) {
-//             LOGE("%u missed client feedback signals (expected every two seconds); client may be offline", missed_feedback);
-//         }
-//         missed_feedback++;
-//     } else {
-//         missed_feedback = 0;
-//     }
-//     return TRUE;
-// }
+static gboolean feedback_callback(gpointer loop) {
+    if (open_connections) {
+        if (missed_feedback_limit && missed_feedback > missed_feedback_limit) {
+            LOGI("***ERROR lost connection with client (network problem?)");
+            LOGI("%u missed client feedback signals exceeds limit of %u", missed_feedback, missed_feedback_limit);
+            LOGI("   Sometimes the network connection may recover after a longer delay:\n"
+                 "   the default limit n = %d seconds, can be changed with the \"-reset n\" option", MISSED_FEEDBACK_LIMIT);
+            if (!nofreeze) {
+                close_window = false; /* leave "frozen" window open if reset_video is false */
+            }
+	    reset_httpd = true;
+	    relaunch_video = true;
+            g_main_loop_quit((GMainLoop *) loop);
+            return TRUE;
+        } else if (missed_feedback > 2) {
+            LOGE("%u missed client feedback signals (expected every two seconds); client may be offline", missed_feedback);
+        }
+        missed_feedback++;
+    } else {
+        missed_feedback = 0;
+    }
+    return TRUE;
+}
 
-// static gboolean reset_callback(gpointer loop) {
-//     if (reset_loop) {
-//         g_main_loop_quit((GMainLoop *) loop);
-//     }
-//     return TRUE;
-// }
+static gboolean reset_callback(gpointer loop) {
+    if (reset_loop) {
+        g_main_loop_quit((GMainLoop *) loop);
+    }
+    return TRUE;
+}
 
 // static gboolean x11_window_callback(gpointer loop) {
 //     /* called while trying to find an x11 window used by playbin (HLS mode) */
@@ -2641,87 +2640,6 @@ static void stop_raop_server () {
     return;
 }
 
-static void read_config_file(const char * filename, const char * uxplay_name) {
-    std::string config_file = filename;
-    std::string option_char = "-";
-    std::vector<std::string> options;
-    options.push_back(uxplay_name);
-    std::ifstream file(config_file);
-    if (file.is_open()) {
-        fprintf(stdout,"UxPlay: reading configuration from  %s\n", config_file.c_str());
-        std::string line;
-        while (std::getline(file, line)) {
-            if (line[0] == '#') continue;
-            //  first process line into separate option items with '\0' as delimiter
-            bool is_part_of_item, in_quotes;
-            char endchar;
-            is_part_of_item = false;
-            for (int i = 0; i < (int) line.size(); i++) {
-                if (is_part_of_item == false) {
-                    if (line[i] == ' ') {
-                        line[i] = '\0';
-                    } else {
-                        // start of new item
-                        is_part_of_item = true;
-                        switch (line[i]) {
-                        case '\'':
-                        case '\"':
-                            endchar = line[i];
-                            line[i] = '\0';
-                            in_quotes = true;
-                            break;
-                        default:
-                            in_quotes = false;
-		            endchar = ' ';
-		            break;
-                        }
-                    }
-                } else {
-                    /* previous character was inside this item */
-                    if (line[i] == endchar) {
-                        if (in_quotes) {
-                            /* cases where endchar is inside quoted item */
-                            if (i > 0 && line[i - 1] == '\\') continue;
-                            if (i + 1 < (int) line.size() && line[i + 1] != ' ') continue;
-		        }
-                        line[i] =  '\0';
-                        is_part_of_item = false;
-                    }
-                }
-            }
-
-            // now tokenize the processed line   
-            std::istringstream iss(line);
-            std::string token;
-            bool first = true;
-            while (std::getline(iss, token, '\0')) {
-                if (token.size() > 0) {
-                    if (first) {
-                        options.push_back(option_char + token.c_str());
-                        first = false;
-                    } else {
-                        options.push_back(token.c_str());
-                    }
-                }
-	    }
-	}
-        file.close();
-    } else {
-        fprintf(stderr,"UxPlay: failed to open configuration file at %s\n", config_file.c_str());
-    }
-    if (options.size() > 1) {
-
-        int argc = options.size();
-        char **argv = (char **) malloc(sizeof(char*) * argc);
-        for (int i = 0; i < argc; i++) {
-            argv[i] = (char *) options[i].c_str();
-        }
-        parse_arguments (argc, argv);
-        free (argv);
-    }
-}
-
-
 extern int init_uxplay(int argc, char *argv[]) {
     std::vector<char> server_hw_addr;
     std::string config_file = "";
@@ -2750,32 +2668,6 @@ extern int init_uxplay(int argc, char *argv[]) {
     if (!getenv("AVAHI_COMPAT_NOWARN")) putenv(avahi_compat_nowarn);
 #endif
 
-    char *rcfile = NULL;
-    /* see if option -rc was given */
-    for (int i = 1; i < argc ; i++) {
-        std::string arg(argv[i]);
-        if (arg == "-rc") {
-            struct stat sb;
-            if (i+1 == argc) {
-                LOGE ("option -rc requires a filename  (-rc <filename>)");
-                exit(1);
-            }
-            rcfile = argv[i+1];
-            if (stat(rcfile, &sb) == -1) {
-                LOGE("startup file %s specified by option -rc was not found", rcfile);
-                exit(0);
-            }
-            break;
-        }
-    }
-    if (rcfile) {
-        config_file = rcfile;
-    } else {	
-        config_file = find_uxplay_config_file();
-    }
-    if (config_file.length()) {
-        read_config_file(config_file.c_str(), argv[0]);
-    }
     parse_arguments (argc, argv);
 
     log_level = (debug_log ? LOGGER_DEBUG_DATA : LOGGER_INFO);
@@ -3041,20 +2933,6 @@ extern int init_uxplay(int argc, char *argv[]) {
         return -1;
     }
 
-// #define PID_MAX 4194304 // 2^22
-//     if (ble_filename.length()) {
-// #ifdef _WIN32
-//         DWORD winpid = GetCurrentProcessId();
-// 	uint32_t pid = (uint32_t) winpid;
-//         g_assert(pid <= PID_MAX);
-// #else
-//         pid_t pid = getpid();
-//         g_assert (pid <= PID_MAX && pid >= 0);
-// #endif
-//         write_bledata((uint32_t *) &pid, argv[0], ble_filename.c_str());
-//         LOGI("Bluetooth LE beacon-based service discovery is possible: PID data written to %s", ble_filename.c_str());
-//     }
-    
     if (register_dnssd()) {
         qDebug() << "Failed to register DNS-SD exiting...";
         stop_raop_server();
@@ -3064,9 +2942,23 @@ extern int init_uxplay(int argc, char *argv[]) {
     }
     reconnect:
     compression_type = 0;
+    relaunch_video = false;
+    reset_httpd = false;
+    reset_loop = false;
     close_window = new_window_closing_behavior;
     gmainloop = g_main_loop_new(NULL, FALSE);
-    g_main_loop_run(gmainloop);
+
+
+    missed_feedback = 0;  
+    guint feedback_watch_id = g_timeout_add_seconds(1, (GSourceFunc) feedback_callback, (gpointer) gmainloop);  
+    guint reset_watch_id = g_timeout_add(100, (GSourceFunc) reset_callback, (gpointer) gmainloop);  
+      
+    g_main_loop_run(gmainloop);  
+    qDebug() << "[uxplay.cpp] Main loop has exited";  
+      
+    // Clean up callbacks  
+    if (feedback_watch_id > 0) g_source_remove(feedback_watch_id);  
+    if (reset_watch_id > 0) g_source_remove(reset_watch_id);  
 
     // Clean up the main loop reference
     GMainLoop *loop = gmainloop;
@@ -3075,54 +2967,47 @@ extern int init_uxplay(int argc, char *argv[]) {
         g_main_loop_unref(loop);
     }
 
+
+    if (relaunch_video) {
+        if (reset_httpd) {
+            raop_stop_httpd(raop);
+        }
+        if (use_audio) {
+            audio_renderer_stop();
+        }
+        if (use_video && (close_window || preserve_connections)) {
+            video_renderer_destroy();
+            if (!preserve_connections) {
+                raop_destroy_airplay_video(raop);
+                url.erase();
+                raop_remove_known_connections(raop);
+            }
+            const char *uri = (url.empty() ? NULL : url.c_str());
+            video_renderer_init(render_logger, server_name.c_str(), videoflip, video_parser.c_str(),rtp_pipeline.c_str(),
+                                video_decoder.c_str(), video_converter.c_str(), videosink.c_str(),
+                                videosink_options.c_str(), fullscreen, video_sync, h265_support,
+                                render_coverart, playbin_version, uri,detached);
+            video_renderer_start();
+        }
+        if (reset_httpd) {
+            unsigned short port = raop_get_port(raop);
+            raop_start_httpd(raop, &port);
+            raop_set_port(raop, port);
+        }
+        goto reconnect;
+    }
+
     // Stop servers before cleanup
     qDebug() << "Stopping RAOP Server...";
     stop_raop_server();
     stop_dnssd();
-    
     cleanup();
-    
     return 0;
-    // main_loop();
-    // if (relaunch_video) {
-    //     if (reset_httpd) {
-    //         raop_stop_httpd(raop);
-    //     }
-    //     if (use_audio) {
-    //         audio_renderer_stop();
-    //     }
-    //     if (use_video && (close_window || preserve_connections)) {
-    //         video_renderer_destroy();
-    //         if (!preserve_connections) {
-    //             raop_destroy_airplay_video(raop);
-    //             url.erase();
-    //             raop_remove_known_connections(raop);
-    //         }
-    //         const char *uri = (url.empty() ? NULL : url.c_str());
-            // video_renderer_init(render_logger, server_name.c_str(), videoflip, video_parser.c_str(),rtp_pipeline.c_str(),
-            //                     video_decoder.c_str(), video_converter.c_str(), videosink.c_str(),
-            //                     videosink_options.c_str(), fullscreen, video_sync, h265_support,
-            //                     render_coverart, playbin_version, uri,detached);
-    //         video_renderer_start();
-    //     }
-    //     if (reset_httpd) {
-    //         unsigned short port = raop_get_port(raop);
-    //         raop_start_httpd(raop, &port);
-    //         raop_set_port(raop, port);
-    //     }
-    //     goto reconnect;
-    // } else {
-    //     LOGI("Stopping RAOP Server...");
-    //     stop_raop_server();
-    //     stop_dnssd();
-    // }
-    // cleanup();
 }
 
 
 extern void uxplay_cleanup() {
     relaunch_video = false;
-    // cleanup();
     if (!gmainloop) {
         qDebug() << "gmainloop is NULL in uxplay_cleanup"; 
         return;
