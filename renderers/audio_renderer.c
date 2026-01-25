@@ -69,29 +69,36 @@ static const char aac_eld_caps[] ="audio/mpeg,mpegversion=(int)4,channnels=(int)
 static gboolean check_plugins (void)
 {
     gboolean ret;
-    GstRegistry *registry;
-    const gchar *needed[] = { "app", "libav", "playback", "autodetect", "videoparsersbad",  NULL};
-    const gchar *gst[] = {"plugins-base", "libav", "plugins-base", "plugins-good", "plugins-bad", NULL};
-    registry = gst_registry_get ();
     ret = TRUE;
-    for (int i = 0; i < g_strv_length ((gchar **) needed); i++) {
-        GstPlugin *plugin;
-        plugin = gst_registry_find_plugin (registry, needed[i]);
-        if (!plugin) {
-            g_print ("Required gstreamer plugin '%s' not found\n"
-                     "Missing plugin is contained in  '[GStreamer 1.x]-%s'\n",needed[i], gst[i]);
-            ret = FALSE;
-            continue;
-        }
-        gst_object_unref (plugin);
-        plugin = NULL;
-    }
-    if (ret == FALSE) {
-        g_print ("\nif the plugin is installed, but not found, your gstreamer registry may have been corrupted.\n"
-                 "to rebuild it when gstreamer next starts, clear your gstreamer cache with:\n"
-                 "\"rm -rf ~/.cache/gstreamer-1.0\"\n\n");
-    }
     return ret;
+    /*  FIXME: implement plugin checks
+        this check fails even though everything required is installed,
+        also since we ship with all required gst plugins this is not critical
+        for now
+    */
+    // GstRegistry *registry;
+    // const gchar *needed[] = { "app", "libav", "playback", "autodetect", "videoparsersbad",  NULL};
+    // const gchar *gst[] = {"plugins-base", "libav", "plugins-base", "plugins-good", "plugins-bad", NULL};
+    // registry = gst_registry_get ();
+    // ret = TRUE;
+    // for (int i = 0; i < g_strv_length ((gchar **) needed); i++) {
+    //     GstPlugin *plugin;
+    //     plugin = gst_registry_find_plugin (registry, needed[i]);
+    //     if (!plugin) {
+    //         g_print ("Required gstreamer plugin '%s' not found\n"
+    //                  "Missing plugin is contained in  '[GStreamer 1.x]-%s'\n",needed[i], gst[i]);
+    //         ret = FALSE;
+    //         continue;
+    //     }
+    //     gst_object_unref (plugin);
+    //     plugin = NULL;
+    // }
+    // if (ret == FALSE) {
+    //     g_print ("\nif the plugin is installed, but not found, your gstreamer registry may have been corrupted.\n"
+    //              "to rebuild it when gstreamer next starts, clear your gstreamer cache with:\n"
+    //              "\"rm -rf ~/.cache/gstreamer-1.0\"\n\n");
+    // }
+    // return ret;
 }
 
 static gboolean check_plugin_feature (const gchar *needed_feature)

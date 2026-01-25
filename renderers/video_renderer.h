@@ -27,6 +27,9 @@
 #ifndef VIDEO_RENDERER_H
 #define VIDEO_RENDERER_H
 
+#include <gst/gst.h>
+#include <gst/app/gstappsrc.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,8 +38,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include "../lib/logger.h"
-#include <gst/gst.h>
-#include <gst/app/gstappsrc.h>
+
 
 typedef enum videoflip_e {
     NONE,

@@ -31,6 +31,7 @@ if ( ( UNIX AND NOT APPLE ) OR USE_X11 )
   endif()
 endif()
 
+# FIXME: DBUS support currently disabled
 # if( UNIX AND NOT APPLE )
 #   find_package(PkgConfig REQUIRED)
 #   pkg_check_modules(DBUS dbus-1>=1.4.12)
@@ -66,41 +67,42 @@ target_link_libraries( uxplay
                    airplay
                    Qt6::Core
 		   )
-if (DBUS_FOUND)
-target_link_libraries( uxplay
-		     ${DBUS_LIBRARIES}
-		     )
-endif()
+# if (DBUS_FOUND)
+# target_link_libraries( uxplay
+# 		     ${DBUS_LIBRARIES}
+# 		     )
+# endif()
 
-install( TARGETS  uxplay RUNTIME DESTINATION bin )
-install( FILES uxplay.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1 )
-install( FILES README.md README.txt README.html LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR} ) 
-install( FILES lib/llhttp/LICENSE-MIT DESTINATION ${CMAKE_INSTALL_DOCDIR}/llhttp )
-install( FILES uxplay.service DESTINATION ${CMAKE_INSTALL_DOCDIR}/systemd ) 
+# TODO: Dont install anything for now
+# install( TARGETS  uxplay RUNTIME DESTINATION bin )
+# install( FILES uxplay.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1 )
+# install( FILES README.md README.txt README.html LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR} ) 
+# install( FILES lib/llhttp/LICENSE-MIT DESTINATION ${CMAKE_INSTALL_DOCDIR}/llhttp )
+# install( FILES uxplay.service DESTINATION ${CMAKE_INSTALL_DOCDIR}/systemd ) 
 
-if (DBUS_FOUND)
-install( FILES Bluetooth_LE_beacon/dbus/uxplay-beacon.py
-         DESTINATION bin
-         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_READ  WORLD_EXECUTE WORLD_READ)
-install( FILES Bluetooth_LE_beacon/dbus/uxplay-beacon.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1 )
-endif()
+# if (DBUS_FOUND)
+# install( FILES Bluetooth_LE_beacon/dbus/uxplay-beacon.py
+#          DESTINATION bin
+#          PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_READ  WORLD_EXECUTE WORLD_READ)
+# install( FILES Bluetooth_LE_beacon/dbus/uxplay-beacon.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1 )
+# endif()
 
-if (WIN32)
-install( FILES Bluetooth_LE_beacon/winrt/uxplay-beacon.py
-         DESTINATION bin
-         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_READ  WORLD_EXECUTE WORLD_READ)
-install( FILES Bluetooth_LE_beacon/winrt/uxplay-beacon.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1 )
-endif()
+# if (WIN32)
+# install( FILES Bluetooth_LE_beacon/winrt/uxplay-beacon.py
+#          DESTINATION bin
+#          PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_READ  WORLD_EXECUTE WORLD_READ)
+# install( FILES Bluetooth_LE_beacon/winrt/uxplay-beacon.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1 )
+# endif()
 
 
 
-# uninstall target
-if(NOT TARGET uninstall)
-  configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
-    IMMEDIATE @ONLY)
+# # uninstall target
+# if(NOT TARGET uninstall)
+#   configure_file(
+#     "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
+#     "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+#     IMMEDIATE @ONLY)
 
-  add_custom_target(uninstall
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
-endif()
+#   add_custom_target(uninstall
+#     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+# endif()
