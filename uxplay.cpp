@@ -2994,6 +2994,12 @@ extern int init_uxplay(int argc, char *argv[]) {
             raop_start_httpd(raop, &port);
             raop_set_port(raop, port);
         }
+        /* 
+        *   FIXME: there seems to be a race condition or 
+        *   timing issue needs investigation, 
+        *   till then sleep for 100 milliseconds 
+        */
+        g_usleep(100000);
         goto reconnect;
     }
 
