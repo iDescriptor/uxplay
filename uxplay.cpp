@@ -2942,14 +2942,18 @@ extern int init_uxplay(int argc, char *argv[]) {
     }
     reconnect:
     compression_type = 0;
-    relaunch_video = false;
-    reset_httpd = false;
-    reset_loop = false;
     close_window = new_window_closing_behavior;
-    gmainloop = g_main_loop_new(NULL, FALSE);
-
-
+    guint gst_video_bus_watch_id[MAX_VIDEO_RENDERERS] = { 0 };
+    guint gst_audio_bus_watch_id[MAX_AUDIO_RENDERERS] = { 0 };
+    gmainloop = g_main_loop_new(NULL,FALSE);
+    relaunch_video = false;
+    monitor_progress = false;
+    reset_loop = false;
+    reset_httpd = false;
+    preserve_connections = false;
+    n_video_renderers = 0;
     missed_feedback = 0;  
+
     guint feedback_watch_id = g_timeout_add_seconds(1, (GSourceFunc) feedback_callback, (gpointer) gmainloop);  
     guint reset_watch_id = g_timeout_add(100, (GSourceFunc) reset_callback, (gpointer) gmainloop);  
       
@@ -2969,6 +2973,12 @@ extern int init_uxplay(int argc, char *argv[]) {
 
 
     if (relaunch_video) {
+        /* 
+        *   FIXME: there seems to be a race condition or 
+        *   timing issue needs investigation, maybe only Windows ?
+        *   sleep for 1 second
+        */
+        g_usleep(SECOND_IN_USECS);
         if (reset_httpd) {
             raop_stop_httpd(raop);
         }
@@ -2994,12 +3004,6 @@ extern int init_uxplay(int argc, char *argv[]) {
             raop_start_httpd(raop, &port);
             raop_set_port(raop, port);
         }
-        /* 
-        *   FIXME: there seems to be a race condition or 
-        *   timing issue needs investigation, 
-        *   till then sleep for 100 milliseconds 
-        */
-        g_usleep(100000);
         goto reconnect;
     }
 
