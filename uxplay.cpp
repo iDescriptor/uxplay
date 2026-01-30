@@ -2985,7 +2985,9 @@ extern int init_uxplay(int argc, char *argv[]) {
         if (use_audio) {
             audio_renderer_stop();
         }
-        if (use_video && (close_window || preserve_connections)) {
+        const bool using_frame_callbacks =
+            (uxplay_callbacks && uxplay_callbacks->frame_callback) && !detached;
+        if (use_video && (close_window || preserve_connections || using_frame_callbacks)) {
             video_renderer_destroy();
             if (!preserve_connections) {
                 raop_destroy_airplay_video(raop);
