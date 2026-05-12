@@ -204,6 +204,14 @@ static bool detached = false;
 
 
 extern callbacks_t *uxplay_callbacks = NULL;
+extern gl_callbacks_t *uxplay_gl_callbacks = NULL;
+
+extern "C" void set_uxplay_gl_callbacks(connection_callback_t conn_cb, get_gl_video_video_item_t get_gl_item_cb) {
+    static gl_callbacks_t cb;
+    cb.connection_callback = conn_cb;
+    cb.uxplay_gl_get_video_item = get_gl_item_cb;
+    uxplay_gl_callbacks = &cb;  
+}
 
 //Support for D-Bus-based screensaver inhibition (org.freedesktop.ScreenSaver) 
 static unsigned int scrsv;
@@ -2868,11 +2876,15 @@ extern int init_uxplay(int argc, char *argv[]) {
     } else {
         LOGI("audio_disabled");
     }
+
+    // FIXME: hardcoded
+    static bool use_gl = true;
+
     if (use_video) {
       video_renderer_init(render_logger, server_name.c_str(), videoflip, video_parser.c_str(), rtp_pipeline.c_str(),
                             video_decoder.c_str(), video_converter.c_str(), videosink.c_str(),
                             videosink_options.c_str(), fullscreen, video_sync, h265_support,
-                            render_coverart, playbin_version, NULL,detached);
+                            render_coverart, playbin_version, NULL,detached, use_gl);
         video_renderer_start();
 #ifdef __OpenBSD__
     } else {
@@ -2998,7 +3010,7 @@ extern int init_uxplay(int argc, char *argv[]) {
             video_renderer_init(render_logger, server_name.c_str(), videoflip, video_parser.c_str(),rtp_pipeline.c_str(),
                                 video_decoder.c_str(), video_converter.c_str(), videosink.c_str(),
                                 videosink_options.c_str(), fullscreen, video_sync, h265_support,
-                                render_coverart, playbin_version, uri,detached);
+                                render_coverart, playbin_version, uri, detached, use_gl);
             video_renderer_start();
         }
         if (reset_httpd) {

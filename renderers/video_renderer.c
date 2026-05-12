@@ -150,6 +150,7 @@ struct video_renderer_s {
     gboolean terminate;
     gint64 duration;
     gint buffering_level;
+    GstElement *qml_sink;
 #ifdef  X_DISPLAY_FIX
     bool use_x11;
     const char * server_name;
@@ -285,10 +286,35 @@ GstElement *make_video_sink(const char *videosink, const char *videosink_options
     free(options);
     return video_sink;
 }
+
+void video_renderer_configure_qml_sink(video_renderer_t *r) {
+    r->qml_sink = gst_bin_get_by_name(GST_BIN(r->pipeline), "qml_sink");
+    
+    if (!r->qml_sink) {
+        logger_log(logger, LOGGER_ERR, "glsink requested but qml_sink element not found in pipeline");
+        return;
+    }
+
+    if (!uxplay_gl_callbacks || !uxplay_gl_callbacks->uxplay_gl_get_video_item) {
+        logger_log(logger, LOGGER_ERR, "glsink requested but uxplay_gl_get_video_item is not available");
+        return;
+    }
+
+    // void *video_item is a qquickitem pointer
+    void *video_item = uxplay_gl_callbacks->uxplay_gl_get_video_item();
+    if (!video_item) {
+        logger_log(logger, LOGGER_ERR, "glsink requested but uxplay_gl_get_video_item returned NULL");
+        return;
+    }
+    
+    g_object_set(G_OBJECT(r->qml_sink), "widget", video_item, NULL);
+    logger_log(logger, LOGGER_INFO, "Configured qml6glsink widget=%p", video_item);
+};
+ 
  
 void video_renderer_init(logger_t *render_logger, const char *server_name, videoflip_t videoflip[2], const char *parser, const char *rtp_pipeline,
                           const char *decoder, const char *converter, const char *videosink, const char *videosink_options, 
-                          bool initial_fullscreen, bool video_sync, bool h265_support, bool coverart_support, guint playbin_version, const char *uri, bool detached) {
+                          bool initial_fullscreen, bool video_sync, bool h265_support, bool coverart_support, guint playbin_version, const char *uri, bool detached, bool glsink) {
     GError *error = NULL;
     GstCaps *caps = NULL;
     bool rtp = (bool) strlen(rtp_pipeline);
@@ -436,29 +462,25 @@ void video_renderer_init(logger_t *render_logger, const char *server_name, video
                     g_string_append(launch, "enable-last-sample=false "); 
                     g_string_append(launch, "qos=true");             
                     
-                } else if (uxplay_callbacks && detached) {
-                    g_string_append(launch, "tee name=t ");
+                } else if (uxplay_gl_callbacks && glsink) {
+                    logger_log(logger, LOGGER_DEBUG, "Using uxplay_gl_callbacks && glsink");
+                    /* 
+                        FIXME: when device is unresponsive for some time fps drops significantly 
+                        we need to somehow optimize
+                    */
+                    // g_string_append(launch, "queue leaky=downstream max-size-buffers=2 max-size-bytes=0 max-size-time=0 ! ");
                     
-                    g_string_append(launch, "t. ! queue ! ");
-                    g_string_append(launch, videosink);
-                    g_string_append(launch, " name=");
-                    g_string_append(launch, videosink);
-                    g_string_append(launch, "_");
-                    g_string_append(launch, renderer_type[i]->codec);
-                    g_string_append(launch, videosink_options);
+                    g_string_append(launch, "glupload ! qml6glsink name=qml_sink ");
+                    
                     if (video_sync && !jpeg_pipeline) {
-                        g_string_append(launch, " sync=true");
+                        g_string_append(launch, "sync=true");
                         sync = true;
                     } else {
-                        g_string_append(launch, " sync=false");
+                        g_string_append(launch, "sync=false");
                         sync = false;
                     }
-                    
-                    g_string_append(launch, " t. ! queue max-size-buffers=2 leaky=downstream ! ");
-                    g_string_append(launch, "videoconvert ! video/x-raw,format=RGB ! ");
-                    g_string_append(launch, "appsink name=frame_sink max-buffers=1 drop=true emit-signals=true");
-                    
-                } else {
+                }
+                else {
                     g_string_append(launch, videosink);
                     g_string_append(launch, " name=");
                     g_string_append(launch, videosink);
@@ -507,6 +529,11 @@ void video_renderer_init(logger_t *render_logger, const char *server_name, video
             renderer_type[i]->appsrc = gst_bin_get_by_name (GST_BIN (renderer_type[i]->pipeline), "video_source");
             g_assert(renderer_type[i]->appsrc);
             g_object_set(renderer_type[i]->appsrc, "caps", caps, "stream-type", 0, "is-live", TRUE, "format", GST_FORMAT_TIME, NULL);
+
+            if (uxplay_gl_callbacks && glsink) {
+                video_renderer_configure_qml_sink(renderer_type[i]);
+            }
+
             g_string_free(launch, TRUE);
             gst_caps_unref(caps);
             gst_object_unref(clock);
@@ -779,6 +806,10 @@ static void video_renderer_destroy_instance(video_renderer_t *renderer) {
         if (renderer->appsrc) {
             gst_object_unref (renderer->appsrc);
             renderer->appsrc = NULL;
+        }
+        if (renderer->qml_sink) {
+            gst_object_unref(renderer->qml_sink);
+            renderer->qml_sink = NULL;
         }
         gst_object_unref(renderer->bus);
         gst_object_unref(renderer->pipeline);
