@@ -2125,6 +2125,9 @@ extern "C" void conn_init (void *cls) {
     if (uxplay_callbacks) {
         uxplay_callbacks->connection_callback(true);
     }
+    if (uxplay_gl_callbacks && uxplay_gl_callbacks->connection_callback) {
+        uxplay_gl_callbacks->connection_callback(true);
+    }
 }
 
 extern "C" void conn_destroy (void *cls) {
@@ -2133,6 +2136,9 @@ extern "C" void conn_destroy (void *cls) {
     LOGD("Open connections: %i", open_connections);
     if (uxplay_callbacks) {
         uxplay_callbacks->connection_callback(false);
+    }
+    if (uxplay_gl_callbacks && uxplay_gl_callbacks->connection_callback) {
+        uxplay_gl_callbacks->connection_callback(false);
     }
     if (open_connections == 0) {
         remote_clock_offset = 0;
