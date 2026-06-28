@@ -2654,7 +2654,7 @@ static void stop_raop_server () {
     return;
 }
 
-extern int init_uxplay(int argc, char *argv[]) {
+extern "C"  int init_uxplay(int argc, char *argv[]) {
     std::vector<char> server_hw_addr;
     std::string config_file = "";
 
@@ -3036,7 +3036,7 @@ extern int init_uxplay(int argc, char *argv[]) {
 }
 
 
-extern void uxplay_cleanup() {
+extern "C"  void uxplay_cleanup() {
     relaunch_video = false;
     if (!gmainloop) {
         qDebug() << "gmainloop is NULL in uxplay_cleanup"; 
