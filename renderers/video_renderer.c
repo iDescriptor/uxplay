@@ -464,21 +464,17 @@ void video_renderer_init(logger_t *render_logger, const char *server_name, video
                     
                 } else if (uxplay_gl_callbacks && glsink) {
                     logger_log(logger, LOGGER_DEBUG, "Using uxplay_gl_callbacks && glsink");
-                    /* 
-                        FIXME: when device is unresponsive for some time fps drops significantly 
-                        we need to somehow optimize
-                    */
-                    // g_string_append(launch, "queue leaky=downstream max-size-buffers=2 max-size-bytes=0 max-size-time=0 ! ");
-                    
-                    g_string_append(launch, "glupload ! qml6glsink name=qml_sink ");
-                    
-                    if (video_sync && !jpeg_pipeline) {
-                        g_string_append(launch, "sync=true");
-                        sync = true;
-                    } else {
-                        g_string_append(launch, "sync=false");
-                        sync = false;
-                    }
+                    g_string_append(launch, "queue leaky=upstream max-size-buffers=5 max-size-bytes=0 max-size-time=500000000 ! ");
+                    g_string_append(launch, "glupload ! qml6glsink name=qml_sink qos=true sync=false ");
+
+                    // FIXME: respect the video_sync option for glsink
+                    // if (video_sync && !jpeg_pipeline) {
+                    //     g_string_append(launch, "sync=true");
+                    //     sync = true;
+                    // } else {
+                    //     g_string_append(launch, "sync=false");
+                    //     sync = false;
+                    // }
                 }
                 else {
                     g_string_append(launch, videosink);
