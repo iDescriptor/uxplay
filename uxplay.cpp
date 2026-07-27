@@ -86,7 +86,18 @@
 #define MIN_PASSWORD_LENGTH 4
 #define DEFAULT_PLAYBIN_VERSION 3
 #define BT709_FIX "capssetter caps=\"video/x-h264, colorimetry=bt709\""
+#ifndef IDESCRIPTOR_APPIMAGE_BUILD
 #define SRGB_FIX  " ! video/x-raw,colorimetry=sRGB,format=RGB  ! "
+#else
+/*
+    AppImage build targets Ubuntu 22 and sadly older versions of gstreamer (1.20.7) 
+    cannot adjust format automatically so will have to make it RGBA
+    this is required for the GstGLQt6VideoItem 
+    TODO: remove this patch once we drop Ubuntu 22 support
+*/
+#  pragma message("Building uxplay for AppImage")
+#define SRGB_FIX  " ! video/x-raw,colorimetry=sRGB,format=RGBA  ! "
+#endif
 #ifdef FULL_RANGE_RGB_FIX
   #define DEFAULT_SRGB_FIX true
 #else
