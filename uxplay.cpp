@@ -217,10 +217,13 @@ static bool detached = false;
 extern callbacks_t *uxplay_callbacks = NULL;
 extern gl_callbacks_t *uxplay_gl_callbacks = NULL;
 
-extern "C" void set_uxplay_gl_callbacks(connection_callback_t conn_cb, get_gl_video_video_item_t get_gl_item_cb) {
+extern "C" void set_uxplay_gl_callbacks(connection_callback_t conn_cb,
+                                        get_gl_video_video_item_t get_gl_item_cb,
+                                        client_connection_details_callback_t client_connection_details_cb) {
     static gl_callbacks_t cb;
     cb.connection_callback = conn_cb;
     cb.uxplay_gl_get_video_item = get_gl_item_cb;
+    cb.client_connection_details_callback = client_connection_details_cb;
     uxplay_gl_callbacks = &cb;  
 }
 
@@ -2209,6 +2212,15 @@ extern "C" void report_client_request(void *cls, char *deviceid, char * model, c
         *admit = false;
         LOGI("*** attempt to connect by blocked client (clientID %s): DENIED\n", deviceid);
     }
+    if (*admit && uxplay_gl_callbacks && uxplay_gl_callbacks->client_connection_details_callback) {
+        uxplay_gl_callbacks->client_connection_details_callback(deviceid, model, name);
+    }
+}
+
+extern "C" void uxplay_set_audio_volume(double volume) {
+    volume = (volume > 1.0) ? 1.0 : volume;
+    volume = (volume < 0.0) ? 0.0 : volume;
+    audio_renderer_set_volume(volume);
 }
 
 extern "C" void audio_process (void *cls, raop_ntp_t *ntp, audio_decode_struct *data) {

@@ -76,6 +76,7 @@ unsigned int video_renderer_listen(void *loop, int id);
 unsigned int video_reset_callback(void *loop);
 typedef void (*frame_callback_t)(const unsigned char* data, int width, int height, int stride, int format);
 typedef void (*connection_callback_t)(bool connected);
+typedef void (*client_connection_details_callback_t)(const char *deviceid, const char *model, const char *name);
 
 typedef void *(*get_gl_video_video_item_t)(); 
 
@@ -88,16 +89,18 @@ typedef struct callbacks
 typedef struct gl_callbacks {
     connection_callback_t connection_callback;
     get_gl_video_video_item_t uxplay_gl_get_video_item;
+    client_connection_details_callback_t client_connection_details_callback;
 } gl_callbacks_t;
 
 extern callbacks_t *uxplay_callbacks;
 extern gl_callbacks_t *uxplay_gl_callbacks;
 
-void set_uxplay_gl_callbacks(connection_callback_t conn_cb, get_gl_video_video_item_t get_gl_item_cb);
+void set_uxplay_gl_callbacks(connection_callback_t conn_cb,
+                             get_gl_video_video_item_t get_gl_item_cb,
+                             client_connection_details_callback_t client_connection_details_cb);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif //VIDEO_RENDERER_H
-

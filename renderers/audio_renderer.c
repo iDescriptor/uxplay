@@ -366,6 +366,9 @@ void audio_renderer_render_buffer(unsigned char* data, int *data_len, unsigned s
 void audio_renderer_set_volume(double volume) {
     volume = (volume > 10.0) ? 10.0 : volume;
     volume = (volume < 0.0) ? 0.0 : volume;
+    if (!renderer || !renderer->volume) {
+        return;
+    }
     g_object_set(renderer->volume, "volume", volume, NULL);
 }
 
